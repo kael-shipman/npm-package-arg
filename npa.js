@@ -12,7 +12,7 @@ function path () {
   return path_
 }
 let validatePackageName
-let os
+let osenv
 
 const isWindows = process.platform === 'win32' || global.FAKE_WINDOWS
 const hasSlashes = isWindows ? /\\|[/]/ : /[/]/
@@ -68,9 +68,11 @@ function resolve (name, spec, where, arg) {
     return fromFile(res, where)
   } else if (spec && /^npm:/i.test(spec)) {
     return fromAlias(res, where)
+  } else if (spec && /^link(#|$)/i.test(spec)) {
+    return fromLink(res, where);
   }
   if (!HostedGit) HostedGit = require('hosted-git-info')
-  const hosted = HostedGit.fromUrl(spec, { noGitPlus: true, noCommittish: true })
+  const hosted = HostedGit.fromUrl(spec, {noGitPlus: true, noCommittish: true})
   if (hosted) {
     return fromHostedGit(res, hosted)
   } else if (spec && isURL.test(spec)) {
@@ -174,8 +176,8 @@ function fromFile (res, where) {
     .replace(/^file:(?:[/]*([~./]))?/, '$1')
   if (/^~[/]/.test(spec)) {
     // this is needed for windows and for file:~/foo/bar
-    if (!os) os = require('os')
-    res.fetchSpec = resolvePath(os.homedir(), spec.slice(2))
+    if (!osenv) osenv = require('osenv')
+    res.fetchSpec = resolvePath(osenv.home(), spec.slice(2))
     res.saveSpec = 'file:' + spec
   } else {
     res.fetchSpec = resolvePath(where, spec)
@@ -188,10 +190,19 @@ function fromFile (res, where) {
   return res
 }
 
+function fromLink (res, where) {
+  if (!where) where = process.cwd()
+  res.type = 'directory'
+  res.where = where
+  res.saveSpec = res.rawSpec;
+  res.fetchSpec = res.rawSpec;
+  return res
+}
+
 function fromHostedGit (res, hosted) {
   res.type = 'git'
   res.hosted = hosted
-  res.saveSpec = hosted.toString({ noGitPlus: false, noCommittish: false })
+  res.saveSpec = hosted.toString({noGitPlus: false, noCommittish: false})
   res.fetchSpec = hosted.getDefaultRepresentation() === 'shortcut' ? null : hosted.toString()
   return setGitCommittish(res, hosted.committish)
 }
